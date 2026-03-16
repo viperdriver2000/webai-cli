@@ -1,0 +1,64 @@
+"""DeepSeek Chat provider."""
+import asyncio
+import re
+from webai.providers import register
+from webai.providers.base import BaseProvider
+
+
+@register("deepseek")
+class DeepSeekProvider(BaseProvider):
+    name = "DeepSeek"
+    url = "https://chat.deepseek.com/"
+    input_selector = "textarea#chat-input, textarea[placeholder]"
+    send_button_selector = 'button[aria-label="Send"], div[role="button"][class*="send"]'
+    response_selector = "div.ds-markdown--block, div[class*='markdown']"
+    new_chat_selector = 'div[class*="new-chat"], a[href="/"]'
+    attach_button_selector = 'button[aria-label*="Attach"], button[aria-label*="Upload"]'
+
+    async def send_message(self, text: str):
+        await self._page.wait_for_selector(self.input_selector, timeout=30000)
+        els = await self._page.query_selector_all(self.response_selector)
+        self._response_count = len(els)
+        self._last_response_text = await self.get_response_text(els[-1]) if els else ""
+        # DeepSeek uses a textarea — fill it directly
+        textarea = await self._page.query_selector(self.input_selector)
+        await textarea.click()
+        await textarea.fill(text)
+        await asyncio.sleep(0.3)
+        # Try send button, fallback to Enter
+        sent = await self._page.evaluate("""() => {
+            const btns = document.querySelectorAll('div[role="button"], button');
+            for (const btn of btns) {
+                if (btn.className?.includes?.('send') || btn.ariaLabel?.includes?.('Send')) {
+                    btn.click(); return true;
+                }
+            }
+            return false;
+        }""")
+        if not sent:
+            await self._page.keyboard.press("Enter")
+
+    async def get_response_text(self, el) -> str:
+        text = await self._page.evaluate("""el => {
+            function toMarkdown(node) {
+                if (node.nodeType === 3) return node.textContent;
+                const tag = node.tagName?.toLowerCase();
+                if (tag === 'pre') {
+                    const code = node.querySelector('code');
+                    const lang = code?.className?.match(/language-(\\w+)/)?.[1] ?? '';
+                    return '\\n```' + lang + '\\n' + (code || node).innerText + '\\n```\\n';
+                }
+                if (tag === 'code' && node.parentElement?.tagName?.toLowerCase() !== 'pre')
+                    return '`' + node.innerText + '`';
+                if (tag === 'br') return '\\n';
+                if (['p','div','li','h1','h2','h3','h4'].includes(tag))
+                    return Array.from(node.childNodes).map(toMarkdown).join('') + '\\n';
+                return Array.from(node.childNodes).map(toMarkdown).join('');
+            }
+            return Array.from(el.childNodes).map(toMarkdown).join('').trim();
+        }""", el)
+        return text.replace('\r\n', '\n').replace('\r', '\n')
+
+    async def stream_response(self):
+        async for text in self._poll_response():
+            yield text

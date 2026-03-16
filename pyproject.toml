@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "webai-cli"
+version = "0.1.0"
+description = "CLI tool for interacting with AI chat interfaces via browser automation"
+requires-python = ">=3.11"
+dependencies = [
+    "playwright>=1.40",
+    "prompt_toolkit>=3.0",
+    "rich>=13.0",
+]
+
+[project.scripts]
+webai = "webai.cli:main"
+
+[project.optional-dependencies]
+bot = ["python-telegram-bot>=20.0"]
+
+[tool.setuptools.packages.find]
+where = ["."]
