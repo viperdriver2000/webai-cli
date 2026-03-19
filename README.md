@@ -51,6 +51,21 @@ webai --provider deepseek
 
 On first run for a provider, a browser window opens for manual login. After that, the session is saved and reused.
 
+### One-Shot Mode
+
+Send a single prompt without entering the interactive REPL:
+
+```bash
+# Send a prompt and get the response
+webai -p chatgpt --prompt "What is 2+2?"
+
+# Raw output (no markdown rendering, ideal for piping)
+webai -p deepseek --prompt "List 5 prime numbers" --raw
+
+# Pipe to other tools
+webai -p claude --prompt "Write a haiku about coding" --raw > haiku.txt
+```
+
 ## Slash Commands
 
 | Command | Description |

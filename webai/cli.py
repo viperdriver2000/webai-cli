@@ -290,6 +290,41 @@ async def _run_batch(browser, state, filepath: str, raw_input: str):
             console.print(f"[dim]Run with --resume to retry failed prompts[/dim]")
 
 
+async def run_oneshot(provider_name: str, prompt: str, raw: bool = False):
+    """Send a single prompt and print the response, then exit."""
+    conf = cfg.load()
+    provider_name = provider_name or conf.provider
+    ProviderClass = get_provider(provider_name)
+    profile_dir = Path(conf.profile_dir).expanduser() / provider_name
+    browser = ProviderClass(profile_dir, conf.headless)
+
+    try:
+        await browser.start()
+    except Exception as e:
+        console.print(f"[bold red]Error:[/bold red] Failed to start browser: {e}")
+        return
+
+    try:
+        await browser.send_message(prompt)
+        response_text = ""
+        if raw:
+            async for text in browser.stream_response():
+                response_text = text
+            if response_text:
+                print(response_text)
+        else:
+            with Live(console=console, refresh_per_second=8, transient=True) as live:
+                async for text in browser.stream_response():
+                    response_text = text
+                    live.update(Markdown(text))
+            if response_text:
+                console.print(Markdown(response_text))
+    except Exception as e:
+        console.print(f"[bold red]Error:[/bold red] {e}")
+    finally:
+        await browser.stop()
+
+
 async def run(provider_override: str | None = None):
     conf = cfg.load()
     provider_name = provider_override or conf.provider
@@ -473,11 +508,15 @@ def main():
     from webai.providers import list_providers
     p = argparse.ArgumentParser(prog="webai")
     p.add_argument("--provider", "-p", choices=list_providers(), help="AI provider to use")
+    p.add_argument("--prompt", type=str, help="Send a single prompt and exit (one-shot mode)")
+    p.add_argument("--raw", action="store_true", help="Output raw text instead of rendered markdown (for piping)")
     p.add_argument("--bot", action="store_true", help="Telegram bot mode")
     args = p.parse_args()
     if args.bot:
         from webai.bot import run_bot
         asyncio.run(run_bot())
+    elif args.prompt:
+        asyncio.run(run_oneshot(args.provider, args.prompt, raw=args.raw))
     else:
         asyncio.run(run(provider_override=args.provider))
 
