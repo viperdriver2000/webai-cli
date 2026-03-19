@@ -15,7 +15,7 @@ CLI tool for interacting with AI chat web interfaces via Playwright browser auto
 | Mistral | `mistral` | chat.mistral.ai |
 | Kimi | `kimi` | kimi.com |
 | Z.AI | `zai` | chat.z.ai |
-| Lumo | `lumo` | lumo.chat |
+| Lumo | `lumo` | lumo.proton.me |
 
 ## Installation
 
