@@ -72,6 +72,18 @@ webai -p chatgpt,claude,deepseek --prompt "Explain quantum computing in one sent
 webai --all --prompt "What is the meaning of life?" --raw
 ```
 
+### Judge Mode
+
+Ask multiple providers, then have another one compare and summarize the answers:
+
+```bash
+# ChatGPT and Claude answer, Gemini judges
+webai -p chatgpt,claude --judge gemini --prompt "Explain quantum computing"
+
+# All providers answer, DeepSeek summarizes
+webai --all --judge deepseek --prompt "What is consciousness?" --raw
+```
+
 ## Slash Commands
 
 | Command | Description |
