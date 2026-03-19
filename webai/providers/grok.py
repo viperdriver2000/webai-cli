@@ -8,10 +8,11 @@ from webai.providers.base import BaseProvider
 class GrokProvider(BaseProvider):
     name = "Grok"
     url = "https://grok.com/"
-    input_selector = 'textarea, div[contenteditable="true"]'
-    send_button_selector = 'button[aria-label="Send"], button[aria-label="Senden"]'
-    response_selector = 'div[class*="message"][class*="assistant"], div[class*="markdown"], div[class*="response-text"]'
-    new_chat_selector = 'a[href="/"], button[aria-label*="New"]'
+    input_selector = 'div.tiptap.ProseMirror, textarea'
+    send_button_selector = 'button[aria-label="Submit"]'
+    response_selector = 'div.message-bubble'
+    new_chat_selector = 'a[href="/"]'
+    attach_button_selector = 'button[aria-label="Attach"]'
 
     async def send_message(self, text: str):
         await self._page.wait_for_selector(self.input_selector, timeout=30000)
@@ -20,17 +21,12 @@ class GrokProvider(BaseProvider):
         self._last_response_text = await self.get_response_text(els[-1]) if els else ""
         input_el = await self._page.query_selector(self.input_selector)
         await input_el.click()
-        tag = await self._page.evaluate("el => el.tagName.toLowerCase()", input_el)
-        if tag == "textarea":
-            await input_el.fill(text)
-        else:
-            await self._page.evaluate(
-                "text => document.execCommand('insertText', false, text)", text
-            )
+        await self._page.evaluate(
+            "text => document.execCommand('insertText', false, text)", text
+        )
         await asyncio.sleep(0.3)
         sent = await self._page.evaluate("""() => {
-            const btn = document.querySelector('button[aria-label="Send"]')
-                     || document.querySelector('button[aria-label="Senden"]');
+            const btn = document.querySelector('button[aria-label="Submit"]');
             if (btn && !btn.disabled) { btn.click(); return true; }
             return false;
         }""")

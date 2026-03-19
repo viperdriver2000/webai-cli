@@ -8,30 +8,26 @@ from webai.providers.base import BaseProvider
 class PerplexityProvider(BaseProvider):
     name = "Perplexity"
     url = "https://www.perplexity.ai/"
-    input_selector = 'textarea[placeholder*="Ask"], textarea[placeholder*="Frag"]'
-    send_button_selector = 'button[aria-label="Submit"], button[aria-label="Absenden"], button.bg-super'
-    response_selector = 'div.prose, div[class*="markdown"], div[class*="answer-text"]'
-    new_chat_selector = 'a[href="/"], button[aria-label*="New"]'
-    attach_button_selector = 'button[aria-label*="Attach"], button[aria-label*="Upload"]'
+    input_selector = 'div#ask-input[contenteditable="true"]'
+    send_button_selector = ''  # Enter key works
+    # TODO: Perplexity uses Lexical editor, needs special input handling
+    # Response selector needs refinement — current one catches too much
+    response_selector = 'div.scrollable-container'
+    new_chat_selector = 'a[href="/"]'
+    attach_button_selector = ''
 
     async def send_message(self, text: str):
         await self._page.wait_for_selector(self.input_selector, timeout=30000)
         els = await self._page.query_selector_all(self.response_selector)
         self._response_count = len(els)
         self._last_response_text = await self.get_response_text(els[-1]) if els else ""
-        textarea = await self._page.query_selector(self.input_selector)
-        await textarea.click()
-        await textarea.fill(text)
+        input_el = await self._page.query_selector(self.input_selector)
+        await input_el.click()
+        await self._page.evaluate(
+            "text => document.execCommand('insertText', false, text)", text
+        )
         await asyncio.sleep(0.3)
-        sent = await self._page.evaluate("""() => {
-            const btn = document.querySelector('button[aria-label="Submit"]')
-                     || document.querySelector('button[aria-label="Absenden"]')
-                     || document.querySelector('button.bg-super');
-            if (btn && !btn.disabled) { btn.click(); return true; }
-            return false;
-        }""")
-        if not sent:
-            await self._page.keyboard.press("Enter")
+        await self._page.keyboard.press("Enter")
 
     async def get_response_text(self, el) -> str:
         text = await self._page.evaluate("""el => {

@@ -8,39 +8,21 @@ from webai.providers.base import BaseProvider
 class ZaiProvider(BaseProvider):
     name = "Z.AI"
     url = "https://chat.z.ai/"
-    input_selector = "textarea, div[contenteditable='true']"
-    send_button_selector = 'button[type="submit"], button[aria-label*="Send"]'
-    response_selector = "div[class*='message'][class*='assistant'], div[class*='markdown'], div[class*='response']"
-    new_chat_selector = 'button[aria-label*="New"], a[href="/"]'
+    input_selector = 'textarea#chat-input'
+    send_button_selector = 'button#send-message-button'
+    response_selector = 'div.chat-assistant'
+    new_chat_selector = 'button#new-chat-button'
 
     async def send_message(self, text: str):
         await self._page.wait_for_selector(self.input_selector, timeout=30000)
         els = await self._page.query_selector_all(self.response_selector)
         self._response_count = len(els)
         self._last_response_text = await self.get_response_text(els[-1]) if els else ""
-        input_el = await self._page.query_selector(self.input_selector)
-        await input_el.click()
-        tag = await self._page.evaluate("el => el.tagName.toLowerCase()", input_el)
-        if tag == "textarea":
-            await input_el.fill(text)
-        else:
-            await self._page.evaluate(
-                "text => document.execCommand('insertText', false, text)", text
-            )
+        textarea = await self._page.query_selector(self.input_selector)
+        await textarea.click()
+        await textarea.fill(text)
         await asyncio.sleep(0.3)
-        await self._type_and_send_button()
-
-    async def _type_and_send_button(self):
-        if self.send_button_selector:
-            sent = await self._page.evaluate(f"""() => {{
-                const btn = document.querySelector('{self.send_button_selector}');
-                if (btn && !btn.disabled) {{ btn.click(); return true; }}
-                return false;
-            }}""")
-            if not sent:
-                await self._page.keyboard.press("Enter")
-        else:
-            await self._page.keyboard.press("Enter")
+        await self._page.keyboard.press("Enter")
 
     async def get_response_text(self, el) -> str:
         text = await self._page.evaluate("""el => {

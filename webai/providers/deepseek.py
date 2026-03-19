@@ -9,11 +9,11 @@ from webai.providers.base import BaseProvider
 class DeepSeekProvider(BaseProvider):
     name = "DeepSeek"
     url = "https://chat.deepseek.com/"
-    input_selector = "textarea#chat-input, textarea[placeholder]"
-    send_button_selector = 'button[aria-label="Send"], div[role="button"][class*="send"]'
-    response_selector = "div.ds-markdown--block, div[class*='markdown']"
-    new_chat_selector = 'div[class*="new-chat"], a[href="/"]'
-    attach_button_selector = 'button[aria-label*="Attach"], button[aria-label*="Upload"]'
+    input_selector = 'textarea[placeholder="Message DeepSeek"], textarea[placeholder]'
+    send_button_selector = ''  # no visible send button, Enter key works
+    response_selector = 'div.ds-markdown'
+    new_chat_selector = ''  # uses URL navigation
+    attach_button_selector = ''  # file input accessible directly
 
     async def send_message(self, text: str):
         await self._page.wait_for_selector(self.input_selector, timeout=30000)
@@ -25,18 +25,7 @@ class DeepSeekProvider(BaseProvider):
         await textarea.click()
         await textarea.fill(text)
         await asyncio.sleep(0.3)
-        # Try send button, fallback to Enter
-        sent = await self._page.evaluate("""() => {
-            const btns = document.querySelectorAll('div[role="button"], button');
-            for (const btn of btns) {
-                if (btn.className?.includes?.('send') || btn.ariaLabel?.includes?.('Send')) {
-                    btn.click(); return true;
-                }
-            }
-            return false;
-        }""")
-        if not sent:
-            await self._page.keyboard.press("Enter")
+        await self._page.keyboard.press("Enter")
 
     async def get_response_text(self, el) -> str:
         text = await self._page.evaluate("""el => {
@@ -62,3 +51,9 @@ class DeepSeekProvider(BaseProvider):
     async def stream_response(self):
         async for text in self._poll_response():
             yield text
+
+    async def new_chat(self):
+        await self._page.goto(self.url)
+        await self._page.wait_for_load_state("load")
+        self._response_count = 0
+        self._last_response_text = ""

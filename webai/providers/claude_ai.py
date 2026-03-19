@@ -8,11 +8,11 @@ from webai.providers.base import BaseProvider
 class ClaudeProvider(BaseProvider):
     name = "Claude"
     url = "https://claude.ai/new"
-    input_selector = 'div[contenteditable="true"].ProseMirror, div[contenteditable="true"]'
-    send_button_selector = 'button[aria-label="Send Message"], button[aria-label="Nachricht senden"]'
-    response_selector = 'div[data-is-streaming], div.font-claude-message div.grid-cols-1 div.break-words'
+    input_selector = 'div.tiptap.ProseMirror, div[contenteditable="true"].ProseMirror'
+    send_button_selector = ''  # no visible send button, Enter key works
+    response_selector = 'div[data-is-streaming]'
     new_chat_selector = 'a[href="/new"]'
-    attach_button_selector = 'button[aria-label*="Attach"], button[aria-label*="Anhang"]'
+    attach_button_selector = ''  # file input accessible directly
 
     async def send_message(self, text: str):
         await self._page.wait_for_selector(self.input_selector, timeout=30000)
@@ -26,14 +26,7 @@ class ClaudeProvider(BaseProvider):
             "text => document.execCommand('insertText', false, text)", text
         )
         await asyncio.sleep(0.3)
-        sent = await self._page.evaluate("""() => {
-            const btn = document.querySelector('button[aria-label="Send Message"]')
-                     || document.querySelector('button[aria-label="Nachricht senden"]');
-            if (btn && !btn.disabled) { btn.click(); return true; }
-            return false;
-        }""")
-        if not sent:
-            await self._page.keyboard.press("Enter")
+        await self._page.keyboard.press("Enter")
 
     async def get_response_text(self, el) -> str:
         text = await self._page.evaluate("""el => {
