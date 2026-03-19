@@ -64,6 +64,12 @@ webai -p deepseek --prompt "List 5 prime numbers" --raw
 
 # Pipe to other tools
 webai -p claude --prompt "Write a haiku about coding" --raw > haiku.txt
+
+# Send to multiple providers at once (comma-separated)
+webai -p chatgpt,claude,deepseek --prompt "Explain quantum computing in one sentence"
+
+# Send to ALL providers
+webai --all --prompt "What is the meaning of life?" --raw
 ```
 
 ## Slash Commands

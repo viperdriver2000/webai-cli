@@ -290,39 +290,78 @@ async def _run_batch(browser, state, filepath: str, raw_input: str):
             console.print(f"[dim]Run with --resume to retry failed prompts[/dim]")
 
 
-async def run_oneshot(provider_name: str, prompt: str, raw: bool = False):
-    """Send a single prompt and print the response, then exit."""
-    conf = cfg.load()
-    provider_name = provider_name or conf.provider
+async def _query_provider(provider_name: str, prompt: str, conf) -> tuple[str, str]:
+    """Query a single provider and return (name, response_text)."""
     ProviderClass = get_provider(provider_name)
     profile_dir = Path(conf.profile_dir).expanduser() / provider_name
     browser = ProviderClass(profile_dir, conf.headless)
-
     try:
         await browser.start()
-    except Exception as e:
-        console.print(f"[bold red]Error:[/bold red] Failed to start browser: {e}")
-        return
-
-    try:
         await browser.send_message(prompt)
         response_text = ""
-        if raw:
-            async for text in browser.stream_response():
-                response_text = text
-            if response_text:
-                print(response_text)
-        else:
-            with Live(console=console, refresh_per_second=8, transient=True) as live:
-                async for text in browser.stream_response():
-                    response_text = text
-                    live.update(Markdown(text))
-            if response_text:
-                console.print(Markdown(response_text))
+        async for text in browser.stream_response():
+            response_text = text
+        return (browser.name, response_text)
     except Exception as e:
-        console.print(f"[bold red]Error:[/bold red] {e}")
+        return (browser.name, f"[Error: {e}]")
     finally:
         await browser.stop()
+
+
+async def run_oneshot(provider_names: list[str], prompt: str, raw: bool = False):
+    """Send a single prompt to one or more providers, print responses, then exit."""
+    conf = cfg.load()
+    if not provider_names:
+        provider_names = [conf.provider]
+
+    multi = len(provider_names) > 1
+
+    if multi:
+        # Run all providers concurrently
+        console.print(f"[dim]Sending to {len(provider_names)} providers...[/dim]")
+        tasks = [_query_provider(name, prompt, conf) for name in provider_names]
+        results = await asyncio.gather(*tasks)
+        for name, response_text in results:
+            if raw:
+                print(f"=== {name} ===")
+                print(response_text)
+                print()
+            else:
+                console.print(f"\n[bold cyan]━━━ {name} ━━━[/bold cyan]")
+                if response_text:
+                    console.print(Markdown(response_text))
+                else:
+                    console.print("[dim]No response[/dim]")
+    else:
+        # Single provider — stream with live rendering
+        name = provider_names[0]
+        ProviderClass = get_provider(name)
+        profile_dir = Path(conf.profile_dir).expanduser() / name
+        browser = ProviderClass(profile_dir, conf.headless)
+        try:
+            await browser.start()
+        except Exception as e:
+            console.print(f"[bold red]Error:[/bold red] Failed to start browser: {e}")
+            return
+        try:
+            await browser.send_message(prompt)
+            response_text = ""
+            if raw:
+                async for text in browser.stream_response():
+                    response_text = text
+                if response_text:
+                    print(response_text)
+            else:
+                with Live(console=console, refresh_per_second=8, transient=True) as live:
+                    async for text in browser.stream_response():
+                        response_text = text
+                        live.update(Markdown(text))
+                if response_text:
+                    console.print(Markdown(response_text))
+        except Exception as e:
+            console.print(f"[bold red]Error:[/bold red] {e}")
+        finally:
+            await browser.stop()
 
 
 async def run(provider_override: str | None = None):
@@ -506,19 +545,34 @@ async def run(provider_override: str | None = None):
 def main():
     import argparse
     from webai.providers import list_providers
+    available = list_providers()
     p = argparse.ArgumentParser(prog="webai")
-    p.add_argument("--provider", "-p", choices=list_providers(), help="AI provider to use")
+    p.add_argument("--provider", "-p", type=str, help="AI provider(s) — comma-separated for multi (e.g. chatgpt,claude,deepseek)")
+    p.add_argument("--all", action="store_true", help="Send prompt to ALL providers (use with --prompt)")
     p.add_argument("--prompt", type=str, help="Send a single prompt and exit (one-shot mode)")
     p.add_argument("--raw", action="store_true", help="Output raw text instead of rendered markdown (for piping)")
     p.add_argument("--bot", action="store_true", help="Telegram bot mode")
     args = p.parse_args()
+
+    # Parse provider list
+    if args.all:
+        providers = available
+    elif args.provider:
+        providers = [name.strip() for name in args.provider.split(",")]
+        for name in providers:
+            if name not in available:
+                p.error(f"Unknown provider: {name!r}. Available: {', '.join(available)}")
+    else:
+        providers = []
+
     if args.bot:
         from webai.bot import run_bot
         asyncio.run(run_bot())
     elif args.prompt:
-        asyncio.run(run_oneshot(args.provider, args.prompt, raw=args.raw))
+        asyncio.run(run_oneshot(providers, args.prompt, raw=args.raw))
     else:
-        asyncio.run(run(provider_override=args.provider))
+        provider = providers[0] if providers else None
+        asyncio.run(run(provider_override=provider))
 
 
 if __name__ == "__main__":
