@@ -10,8 +10,6 @@ class PerplexityProvider(BaseProvider):
     url = "https://www.perplexity.ai/"
     input_selector = 'div#ask-input[contenteditable="true"]'
     send_button_selector = ''  # Enter key works
-    # TODO: Perplexity uses Lexical editor, needs special input handling
-    # Response selector needs refinement — current one catches too much
     response_selector = 'div.scrollable-container'
     new_chat_selector = 'a[href="/"]'
     attach_button_selector = ''
@@ -21,12 +19,28 @@ class PerplexityProvider(BaseProvider):
         els = await self._page.query_selector_all(self.response_selector)
         self._response_count = len(els)
         self._last_response_text = await self.get_response_text(els[-1]) if els else ""
+        # Perplexity uses Lexical editor — execCommand doesn't work.
+        # Use clipboard paste instead.
         input_el = await self._page.query_selector(self.input_selector)
         await input_el.click()
-        await self._page.evaluate(
-            "text => document.execCommand('insertText', false, text)", text
+        await self._page.evaluate("""(text) => {
+            const dt = new DataTransfer();
+            dt.setData('text/plain', text);
+            const el = document.querySelector('#ask-input');
+            el.dispatchEvent(new ClipboardEvent('paste', {
+                clipboardData: dt, bubbles: true, cancelable: true
+            }));
+        }""", text)
+        await asyncio.sleep(0.5)
+        # Verify text appeared, fallback to keyboard typing
+        content = await self._page.evaluate(
+            "() => document.querySelector('#ask-input')?.innerText?.trim() || ''"
         )
-        await asyncio.sleep(0.3)
+        if not content:
+            # Fallback: type character by character (slow but works)
+            await input_el.click()
+            await self._page.keyboard.type(text, delay=20)
+            await asyncio.sleep(0.3)
         await self._page.keyboard.press("Enter")
 
     async def get_response_text(self, el) -> str:
@@ -53,3 +67,9 @@ class PerplexityProvider(BaseProvider):
     async def stream_response(self):
         async for text in self._poll_response():
             yield text
+
+    async def new_chat(self):
+        await self._page.goto(self.url)
+        await self._page.wait_for_load_state("load")
+        self._response_count = 0
+        self._last_response_text = ""
