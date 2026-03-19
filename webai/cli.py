@@ -339,8 +339,28 @@ async def _run_single(provider_name: str, prompt: str, conf, raw: bool = False):
         await browser.stop()
 
 
+JUDGE_PROMPTS = {
+    "de": (
+        'Ich habe {count} verschiedene KI-Assistenten die folgende Frage gestellt:\n\n'
+        '"{prompt}"\n\n'
+        'Hier sind ihre Antworten:\n\n{answers}\n\n'
+        'Bitte vergleiche und fasse die Antworten zusammen. '
+        'Zeige Übereinstimmungen, Unterschiede und welche Antwort am hilfreichsten oder genauesten ist. '
+        'Halte es kurz und prägnant.'
+    ),
+    "en": (
+        'I asked {count} different AI assistants the following question:\n\n'
+        '"{prompt}"\n\n'
+        'Here are their answers:\n\n{answers}\n\n'
+        'Please compare and summarize the answers. '
+        'Point out agreements, disagreements, and which answer is most helpful or accurate. '
+        'Keep it concise.'
+    ),
+}
+
+
 async def run_oneshot(provider_names: list[str], prompt: str, raw: bool = False,
-                      judge: str | None = None):
+                      judge: str | None = None, lang: str = "de"):
     """Send a single prompt to one or more providers, print responses, then exit."""
     conf = cfg.load()
     if not provider_names:
@@ -375,13 +395,9 @@ async def run_oneshot(provider_names: list[str], prompt: str, raw: bool = False,
         answers = "\n\n".join(
             f"=== {name} ===\n{text}" for name, text in results if text
         )
-        judge_prompt = (
-            f"I asked {len(results)} different AI assistants the following question:\n\n"
-            f'"{prompt}"\n\n'
-            f"Here are their answers:\n\n{answers}\n\n"
-            f"Please compare and summarize the answers. "
-            f"Point out agreements, disagreements, and which answer is most helpful or accurate. "
-            f"Keep it concise."
+        template = JUDGE_PROMPTS.get(lang, JUDGE_PROMPTS["de"])
+        judge_prompt = template.format(
+            count=len(results), prompt=prompt, answers=answers
         )
         if raw:
             print(f"=== {judge.upper()} (Judge) ===")
@@ -577,6 +593,7 @@ def main():
     p.add_argument("--all", action="store_true", help="Send prompt to ALL providers (use with --prompt)")
     p.add_argument("--prompt", type=str, help="Send a single prompt and exit (one-shot mode)")
     p.add_argument("--judge", "-j", type=str, metavar="PROVIDER", help="After collecting answers, send them to this provider for comparison/summary")
+    p.add_argument("--lang", choices=["de", "en"], default="de", help="Language for judge summary (default: de)")
     p.add_argument("--raw", action="store_true", help="Output raw text instead of rendered markdown (for piping)")
     p.add_argument("--bot", action="store_true", help="Telegram bot mode")
     args = p.parse_args()
@@ -599,7 +616,7 @@ def main():
         from webai.bot import run_bot
         asyncio.run(run_bot())
     elif args.prompt:
-        asyncio.run(run_oneshot(providers, args.prompt, raw=args.raw, judge=args.judge))
+        asyncio.run(run_oneshot(providers, args.prompt, raw=args.raw, judge=args.judge, lang=args.lang))
     else:
         provider = providers[0] if providers else None
         asyncio.run(run(provider_override=provider))
