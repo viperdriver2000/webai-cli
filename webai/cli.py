@@ -411,21 +411,18 @@ async def run(provider_override: str | None = None):
     provider_name = provider_override or conf.provider
     cwd = Path.cwd()
 
-    if not (cwd / ".git").exists():
-        console.print(f"[bold red]Error:[/bold red] Not a git repository: {cwd}")
-        return
-    r = subprocess.run(
-        ["git", "rev-parse", "--abbrev-ref", "HEAD"],
-        cwd=cwd, capture_output=True, text=True
-    )
-    if r.returncode != 0:
-        console.print("[bold red]Error:[/bold red] Empty git repository — please make an initial commit first.")
-        return
-    branch = r.stdout.strip()
-    console.print(f"[dim]Branch: {branch} — loading context...[/dim]")
-    context = load_git_context(cwd)
-    file_count = context.count("=== ")
-    console.print(f"[dim]{len(context)} chars from {file_count} files[/dim]")
+    context = ""
+    if (cwd / ".git").exists():
+        r = subprocess.run(
+            ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+            cwd=cwd, capture_output=True, text=True
+        )
+        if r.returncode == 0:
+            branch = r.stdout.strip()
+            console.print(f"[dim]Branch: {branch} — loading context...[/dim]")
+            context = load_git_context(cwd)
+            file_count = context.count("=== ")
+            console.print(f"[dim]{len(context)} chars from {file_count} files[/dim]")
 
     state = SessionState(
         model=conf.model, session_context=context, cwd=cwd,
