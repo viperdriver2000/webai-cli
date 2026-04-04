@@ -586,7 +586,7 @@ def main():
     from webai.providers import list_providers
     available = list_providers()
     p = argparse.ArgumentParser(prog="webai")
-    p.add_argument("--provider", "-p", type=str, help="AI provider(s) — comma-separated for multi (e.g. chatgpt,claude,deepseek)")
+    p.add_argument("--provider", "-p", type=str, nargs="?", const="__list__", help="AI provider(s) — comma-separated for multi, or use without value to list all")
     p.add_argument("--all", action="store_true", help="Send prompt to ALL providers (use with --prompt)")
     p.add_argument("--prompt", type=str, help="Send a single prompt and exit (one-shot mode)")
     p.add_argument("--judge", "-j", type=str, metavar="PROVIDER", help="After collecting answers, send them to this provider for comparison/summary")
@@ -594,6 +594,18 @@ def main():
     p.add_argument("--raw", action="store_true", help="Output raw text instead of rendered markdown (for piping)")
     p.add_argument("--bot", action="store_true", help="Telegram bot mode")
     args = p.parse_args()
+
+    # List providers if -p without argument
+    if args.provider == "__list__":
+        conf = cfg.load()
+        console.print("[bold]Available providers:[/bold]\n")
+        for name in available:
+            default = " [dim](default)[/dim]" if name == conf.provider else ""
+            profile = Path(conf.profile_dir).expanduser() / name
+            logged_in = " [green]●[/green]" if profile.exists() else " [dim]○[/dim]"
+            console.print(f"  {logged_in} {name}{default}")
+        console.print(f"\n[dim]● = logged in, ○ = not yet logged in[/dim]")
+        return
 
     # Parse provider list
     if args.all:
