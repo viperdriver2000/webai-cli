@@ -125,7 +125,7 @@ class GeminiProvider(BaseProvider):
 
     async def _open_model_picker(self) -> dict[str, dict]:
         await self._page.locator(
-            'button[aria-label="Modusauswahl öffnen"], button[aria-label="Open model picker"]'
+            'button[aria-label="Open mode picker"], button[aria-label="Modusauswahl öffnen"], button[aria-label="Open model picker"]'
         ).click()
         await asyncio.sleep(0.5)
         return await self._page.evaluate("""() => {
